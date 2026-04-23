@@ -459,14 +459,100 @@ For issues and feature requests, please check the server logs or contact develop
 
 **Appointment Agent** - Transform natural language into calendar events instantly. 🎯
 
-## 🛠 **Quick Commands**
+## � **Quick Start**
 
-### Start Server
+### **1. Clone and Setup**
 ```bash
-source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+git clone https://github.com/devTejasMokarkar/SlotMan.git
+cd SlotMan
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### Kill Port
+### **2. Configure Environment**
 ```bash
-lsof -ti:8001 | xargs kill -9 2>/dev/null || true
+cp .env.example .env
+# Add your OpenAI API key to .env file
 ```
+
+### **3. Run Application**
+```bash
+# Development mode
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+
+# Production mode
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+### **4. Docker (Optional)**
+```bash
+# Build and run with Docker
+docker-compose up --build
+
+# Or build manually
+docker build -t appointment-agent .
+docker run -p 8000:8000 appointment-agent
+```
+
+## 📊 **API Documentation**
+
+### **Interactive Docs**
+Visit `http://localhost:8001/docs` for interactive API documentation
+
+### **Endpoints**
+- `GET /` - API information and status
+- `GET /health` - Health check endpoint
+- `POST /chat` - Create calendar events
+
+## 🔧 **Development**
+
+### **Project Structure**
+```
+appointment-agent/
+├── app/
+│   ├── main.py              # FastAPI application
+│   └── services/
+│       ├── ai_service.py      # OpenAI integration
+│       ├── calendar_service.py # Google Calendar API
+│       ├── mock_calendar_service.py # Mock calendar for testing
+│       └── simple_parser.py  # Fallback parser
+├── requirements.txt          # Python dependencies
+├── Dockerfile              # Container configuration
+├── docker-compose.yml       # Docker orchestration
+├── .env.example           # Environment template
+└── README.md               # This file
+```
+
+### **Testing**
+```bash
+# Test the API
+curl -X POST http://localhost:8001/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Schedule meeting for tomorrow at 10am"}'
+
+# Health check
+curl http://localhost:8001/health
+```
+
+## 📦 **Deployment**
+
+### **Environment Variables**
+- `OPENAI_API_KEY` - OpenAI API key (required)
+- `USE_MOCK_CALENDAR` - Use mock calendar (default: false)
+
+### **Production Deployment**
+```bash
+# Using Docker (recommended)
+docker-compose -f docker-compose.yml up -d
+
+# Using Python
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+## 🤝 **Contributing**
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
+
+## 📄 **License**
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
