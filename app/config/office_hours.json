@@ -1,0 +1,6 @@
+{
+  "working_days": [0, 1, 2, 3, 4],
+  "work_start_time": "09:30",
+  "work_end_time": "18:30",
+  "timezone": "Asia/Kolkata"
+}

@@ -115,3 +115,47 @@ def generate_booking_link(start_time):
     USERNAME = "tejas-mokarkar-peflct"
     EVENT = "30min"
     return f"https://cal.com/{USERNAME}/{EVENT}?date={date}&time={time}"
+
+def list_meetings(date_str: str):
+    try:
+        service = get_calendar_service()
+        
+        # Parse the date and ensure we span the whole day in IST
+        start_datetime = datetime.fromisoformat(f"{date_str}T00:00:00+05:30")
+        end_datetime = start_datetime + timedelta(days=1)
+        
+        events_result = service.events().list(
+            calendarId='primary', 
+            timeMin=start_datetime.isoformat(), 
+            timeMax=end_datetime.isoformat(),
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        
+        events = events_result.get('items', [])
+        
+        if not events:
+            return "No meetings found for this date."
+            
+        summary_list = []
+        for event in events:
+            start = event['start'].get('dateTime', event['start'].get('date'))
+            time_str = datetime.fromisoformat(start).strftime('%I:%M %p') if 'T' in start else "All day"
+            summary_list.append(f"[{event['id']}] {time_str} - {event.get('summary', 'Busy')}")
+            
+        return "\n".join(summary_list)
+        
+    except Exception as e:
+        return f"Error fetching meetings: {e}"
+
+def cancel_meeting(event_id: str):
+    try:
+        service = get_calendar_service()
+        service.events().delete(calendarId='primary', eventId=event_id).execute()
+        return "SUCCESS: Meeting cancelled."
+    except HttpError as e:
+        if e.resp.status == 404:
+            return "ERROR: Meeting not found."
+        return f"ERROR: Calendar API error: {e}"
+    except Exception as e:
+        return f"ERROR: Unexpected error: {e}"
