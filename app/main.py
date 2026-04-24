@@ -1,11 +1,12 @@
 import os
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+import json
 import logging
-from app.services.ai_service import extract_intent
-from app.services.simple_parser import extract_intent_simple
-from app.services.calendar_service import create_calendar_event
-from app.services.mock_calendar_service import create_mock_calendar_event
+from typing import List, Optional, Dict
+from fastapi import FastAPI
+from pydantic import BaseModel
+from app.services.ai_service import get_ai_response
+from app.services.calendar_service import create_calendar_event, check_availability, suggest_slots
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -13,97 +14,97 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Appointment Agent API",
-    description="Intelligent appointment scheduling with Google Calendar integration",
-    version="1.0.0"
+    description="Intelligent multi-turn appointment scheduling",
+    version="2.0.0"
 )
+
+# In-memory session store
+sessions: Dict[str, List[Dict]] = {}
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = "default_user"
 
 class ChatResponse(BaseModel):
     message: str
-    event_id: str = None
-    event_link: str = None
-
-class ErrorResponse(BaseModel):
-    error: str
-    detail: str = None
+    session_id: str
+    intent: str
+    action: str
+    event_id: Optional[str] = None
+    event_link: Optional[str] = None
 
 @app.get("/")
 async def root():
-    """Root endpoint with API information"""
-    return {
-        "name": "Appointment Agent API",
-        "version": "1.0.0",
-        "description": "Intelligent appointment scheduling with Google Calendar integration",
-        "endpoints": {
-            "chat": "/chat",
-            "health": "/health",
-            "docs": "/docs"
-        }
-    }
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "timestamp": "2026-04-23T18:00:00Z"}
+    return {"message": "Appointment Agent API v2.0.0"}
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """Process user message and create calendar event"""
-    try:
-        logger.info(f"Incoming request: {req.message}")
+    session_id = req.session_id
+    if session_id not in sessions:
+        sessions[session_id] = []
+    
+    history = sessions[session_id]
+    history.append({"role": "user", "content": req.message})
 
-        # Try AI service first, fallback to simple parser if it fails or returns unknown
-        try:
-            data = extract_intent(req.message)
-            logger.info(f"AI response: {data}")
+    # Agent Loop
+    max_turns = 3
+    for _ in range(max_turns):
+        ai_data = get_ai_response(history)
+        logger.info(f"AI Response Attempt: {ai_data}")
+
+        if ai_data.get("action") == "CALL_TOOL":
+            tool_name = ai_data.get("tool")
+            params = ai_data.get("parameters", {})
             
-            # Check for quota issues
-            if "quota" in str(data).lower() or "429" in str(data) or data.get("error"):
-                logger.warning("AI quota exceeded, using simple parser")
-                data = extract_intent_simple(req.message)
-                logger.info(f"Simple parser response: {data}")
-            # If AI service returns unknown intent, fallback to simple parser
-            elif data.get("intent") == "UNKNOWN" or not data.get("datetime"):
-                logger.warning("AI returned unknown, using simple parser")
-                data = extract_intent_simple(req.message)
-                logger.info(f"Simple parser response: {data}")
-        except Exception as e:
-            logger.error(f"AI service failed: {e}, using simple parser")
-            data = extract_intent_simple(req.message)
-            logger.info(f"Simple parser response: {data}")
+            tool_result = "Unknown tool"
+            if tool_name == "CHECK_AVAILABILITY":
+                dt = params.get("datetime")
+                dur = params.get("duration", 30)
+                available = check_availability(dt, dur)
+                tool_result = "FREE" if available else "BUSY"
+            
+            elif tool_name == "CREATE_MEETING":
+                dt = params.get("datetime")
+                dur = params.get("duration", 30)
+                res = create_calendar_event(dt, "Meeting", dur)
+                if res.get("success"):
+                    tool_result = f"SUCCESS: Event ID {res.get('event_id')}"
+                    ai_data["event_id"] = res.get("event_id")
+                    ai_data["event_link"] = res.get("event_link")
+                else:
+                    tool_result = f"ERROR: {res.get('error')}"
+            
+            elif tool_name == "SUGGEST_SLOTS":
+                # Extract date from datetime or use today
+                dt_str = params.get("datetime", "2026-04-24T00:00:00")
+                date_str = dt_str.split("T")[0]
+                slots = suggest_slots(date_str)
+                tool_result = f"AVAILABLE_SLOTS: {', '.join(slots)}"
 
-        logger.info(f"Detected intent: {data.get('intent')}")
-        if data.get("intent") != "CREATE_EVENT":
-            return ChatResponse(message="I can help you book meetings. Try again.")
-
-        start_time = data.get("datetime")
-        duration = data.get("duration_minutes", 30)
-
-        if not start_time:
-            raise HTTPException(status_code=400, detail="Please provide a valid time.")
-
-        # Use mock calendar if environment variable is set (no Google API needed)
-        use_mock = os.environ.get("USE_MOCK_CALENDAR", "false").lower() == "true"
+            # Feed tool result back to AI
+            history.append({"role": "assistant", "content": json.dumps(ai_data)}) # AI's intent to call tool
+            history.append({"role": "system", "content": f"TOOL_OUTPUT: {tool_result}"})
+            continue # Let AI process the tool output
         
-        if use_mock:
-            result = create_mock_calendar_event(start_time, "Meeting", duration)
         else:
-            result = create_calendar_event(start_time, "Meeting", duration)
-
-        if result["success"]:
+            # Not a tool call, this is the final response for this turn
+            history.append({"role": "assistant", "content": json.dumps(ai_data)})
             return ChatResponse(
-                message=result["message"],
-                event_id=result["event_id"],
-                event_link=result["event_link"]
+                message=ai_data.get("message", ""),
+                session_id=session_id,
+                intent=ai_data.get("intent", "UNKNOWN"),
+                action=ai_data.get("action", "ASK_QUESTION"),
+                event_id=ai_data.get("event_id"),
+                event_link=ai_data.get("event_link")
             )
-        else:
-            raise HTTPException(status_code=500, detail=result["error"])
 
-    except HTTPException as he:
-        logger.error(f"HTTP error: {he.detail}")
-        raise he
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    return ChatResponse(
+        message="I'm thinking too much. Let's start over.",
+        session_id=session_id,
+        intent="UNKNOWN",
+        action="ERROR"
+    )
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}

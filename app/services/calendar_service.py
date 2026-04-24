@@ -75,6 +75,38 @@ def create_calendar_event(start_time, summary="Meeting", duration_minutes=30):
             'message': "Failed to create calendar event"
         }
 
+def check_availability(start_time: str, duration_minutes: int = 30):
+    try:
+        service = get_calendar_service()
+        
+        start_datetime = datetime.fromisoformat(start_time)
+        end_datetime = start_datetime + timedelta(minutes=duration_minutes)
+        
+        body = {
+            "timeMin": start_datetime.isoformat() + "Z",
+            "timeMax": end_datetime.isoformat() + "Z",
+            "items": [{"id": "primary"}]
+        }
+        
+        freebusy_result = service.freebusy().query(body=body).execute()
+        busy_slots = freebusy_result.get('calendars', {}).get('primary', {}).get('busy', [])
+        
+        return len(busy_slots) == 0
+        
+    except Exception as e:
+        print(f"Calendar Availability Error: {e}")
+        return False
+
+def suggest_slots(date_str: str):
+    # Just suggest 10 AM, 2 PM, 4 PM for simplicity
+    base_slots = ["10:00:00", "14:00:00", "16:00:00"]
+    suggestions = []
+    for slot in base_slots:
+        dt_str = f"{date_str}T{slot}"
+        if check_availability(dt_str):
+            suggestions.append(dt_str)
+    return suggestions
+
 def generate_booking_link(start_time):
     # Keep this for backward compatibility
     dt = datetime.fromisoformat(start_time)
