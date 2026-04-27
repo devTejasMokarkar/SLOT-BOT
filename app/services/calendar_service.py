@@ -89,11 +89,15 @@ def check_availability(start_time: str, duration_minutes: int = 30):
             duration_minutes = 30
             
         start_datetime = datetime.fromisoformat(start_time)
+        if start_datetime.tzinfo is None:
+            from datetime import timezone
+            ist = timezone(timedelta(hours=5, minutes=30))
+            start_datetime = start_datetime.replace(tzinfo=ist)
         end_datetime = start_datetime + timedelta(minutes=duration_minutes)
         
         body = {
-            "timeMin": start_datetime.isoformat() + "+05:30",
-            "timeMax": end_datetime.isoformat() + "+05:30",
+            "timeMin": start_datetime.isoformat(),
+            "timeMax": end_datetime.isoformat(),
             "items": [{"id": "primary"}]
         }
         
@@ -104,7 +108,9 @@ def check_availability(start_time: str, duration_minutes: int = 30):
         
     except Exception as e:
         print(f"Calendar Availability Error: {e}")
-        return False
+        # If calendar service is unavailable, assume the slot is available
+        # rather than incorrectly marking it as busy
+        return True
 
 def suggest_slots(date_str: str):
     # Just suggest 10 AM, 2 PM, 4 PM for simplicity
