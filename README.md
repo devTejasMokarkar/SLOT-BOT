@@ -556,3 +556,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
 
 ## 📄 **License**
 This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+
+
+<!-- run project -->
+
+
+venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+
+<!-- test slotbot -->
+
+source venv/bin/activate && python3 test_cli.py

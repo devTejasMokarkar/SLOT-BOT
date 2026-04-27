@@ -14,7 +14,7 @@ def chat():
     print(f"--- Scheduling Assistant CLI (Session: {session_id}) ---")
     print("Type 'quit' or 'exit' to stop.\n")
     
-    url = "http://localhost:8000/chat"
+    url = "http://localhost:8001/chat"
     
     while True:
         user_input = input("User: ")
@@ -30,17 +30,17 @@ def chat():
             response = requests.post(url, json=payload)
             if response.status_code == 200:
                 data = response.json()
-                print(f"Bot: {data.get('message')}")
+                print(f"Slot Bot: {data.get('message')}")
                 # print(f"DEBUG: Intent: {data.get('intent')}, Action: {data.get('action')}")
             else:
                 logging.error(f"API Error {response.status_code}: {response.text}")
-                print(f"Bot: Server returned an error ({response.status_code}). Check logs for details.")
+                print(f"Slot Bot: Server returned an error ({response.status_code}). Check logs for details.")
         except requests.exceptions.ConnectionError as e:
             logging.error(f"Connection Error: {e}")
-            print(f"Bot: Connection failed. Please ensure the backend server is running at {url}.")
+            print(f"Slot Bot: Connection failed. Please ensure the backend server is running at {url}.")
         except Exception as e:
             logging.error(f"Unexpected Error: {e}", exc_info=True)
-            print("Bot: An unexpected error occurred. Check logs for details.")
+            print("Slot Bot: An unexpected error occurred. Check logs for details.")
 
 if __name__ == "__main__":
     chat()
