@@ -566,3 +566,7 @@ venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 <!-- test slotbot -->
 
 source venv/bin/activate && python3 test_cli.py
+
+<!-- kill port -->
+
+lsof -ti:8001 | xargs kill -9 2>/dev/null || true
