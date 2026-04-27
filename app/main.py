@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from datetime import datetime
 from typing import List, Optional, Dict
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -47,7 +48,7 @@ async def chat(req: ChatRequest):
     history.append({"role": "user", "content": req.message})
 
     # Agent Loop
-    max_turns = 3
+    max_turns = 8
     for _ in range(max_turns):
         ai_data = get_ai_response(history)
         logger.info(f"AI Response Attempt: {ai_data}")
@@ -57,7 +58,7 @@ async def chat(req: ChatRequest):
         if not extracted_dt:
             extracted_dt = ai_data.get("parameters", {}).get("datetime")
         
-        val_res = {"valid": True, "action": ai_data.get("action")}
+        val_res = {"valid": True, "action": ai_data.get("action"), "is_past": False, "is_weekend": False, "is_office_hours": True}
         if extracted_dt and extracted_dt != "null" and extracted_dt != "stored_session_datetime":
             val_res = validate_meeting_request(extracted_dt)
 
@@ -90,13 +91,29 @@ async def chat(req: ChatRequest):
 
             debug_log["final_action"] = ai_data["action"]
             logger.info(f"BACKEND VALIDATION LOG:\n{json.dumps(debug_log, indent=2)}")
-
             history.append({"role": "assistant", "content": json.dumps(ai_data)})
             return ChatResponse(
                 message=ai_data.get("message") or "I could not understand that.",
                 session_id=session_id,
                 intent=ai_data.get("intent") or "UNKNOWN",
                 action=ai_data.get("action") or "ASK",
+            )
+        
+        # Override AI if it incorrectly says outside office hours when validation says it's valid
+        if (val_res["valid"] and val_res["is_office_hours"] and 
+            ai_data.get("action") == "ASK" and 
+            "outside office hours" in ai_data.get("message", "").lower()):
+            
+            ai_data["action"] = "CONFIRM"
+            ai_data["message"] = f"This time is within office hours. Would you like to proceed with scheduling the meeting at {datetime.fromisoformat(extracted_dt).strftime('%I:%M %p')}?"
+            debug_log["final_action"] = "OVERRIDE_OFFICE_HOURS"
+            logger.info(f"BACKEND VALIDATION LOG:\n{json.dumps(debug_log, indent=2)}")
+            history.append({"role": "assistant", "content": json.dumps(ai_data)})
+            return ChatResponse(
+                message=ai_data.get("message"),
+                session_id=session_id,
+                intent=ai_data.get("intent") or "UNKNOWN",
+                action=ai_data.get("action") or "CONFIRM",
             )
         # ==================================
 
@@ -151,6 +168,40 @@ async def chat(req: ChatRequest):
             continue # Let AI process the tool output
         
         else:
+            # Check if AI is talking about availability without calling tool (only for user-like responses)
+            message = ai_data.get("message", "").lower()
+            extracted_dt = ai_data.get("datetime")
+            
+            # If AI doesn't include datetime, try to get it from previous messages
+            if not extracted_dt or extracted_dt == "null":
+                for msg in reversed(history):
+                    if msg.get("role") == "assistant":
+                        try:
+                            content = json.loads(msg.get("content", "{}"))
+                            if content.get("datetime") and content.get("datetime") != "null":
+                                extracted_dt = content.get("datetime")
+                                break
+                        except:
+                            continue
+            
+            # Debug logging
+            logger.info(f"FALLBACK CHECK: message='{message}', datetime='{extracted_dt}', action='{ai_data.get('action')}'")
+            
+            # Only trigger fallback if AI is making availability claims without calling tool,
+            # but NOT if the message is asking about duration or is a question
+            if (extracted_dt and extracted_dt != "null" and 
+                ai_data.get("action") != "CALL_TOOL" and
+                ("available" in message or "busy" in message or "booked" in message or "unavailable" in message or "not available" in message) and
+                not any(q in message for q in ["how long", "what duration", "how much time", "?"])):  # Don't trigger on questions
+                
+                logger.info(f"FALLBACK TRIGGERED: Forcing CHECK_AVAILABILITY for {extracted_dt}")
+                # Force tool call for availability check
+                ai_data["action"] = "CALL_TOOL"
+                ai_data["tool"] = "CHECK_AVAILABILITY"
+                ai_data["parameters"] = {"datetime": extracted_dt}
+                history.append({"role": "assistant", "content": json.dumps(ai_data)})
+                continue
+            
             # Not a tool call, this is the final response for this turn
             debug_log["final_action"] = ai_data.get("action")
             logger.info(f"BACKEND VALIDATION LOG:\n{json.dumps(debug_log, indent=2)}")

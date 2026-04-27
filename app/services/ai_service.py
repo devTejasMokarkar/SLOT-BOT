@@ -3,16 +3,11 @@ import json
 import re
 from typing import List, Dict
 from dotenv import load_dotenv
-import google.generativeai as genai
-import anthropic
 import openai
 
 load_dotenv()
 
-# Initialize API Clients
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-openai_client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# Initialize only OpenRouter client
 openrouter_client = openai.OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY"),
@@ -87,8 +82,10 @@ STEP 4: Call tool ONLY after confirmation
 - Be conversational but precise
 - Ask one question at a time
 - If input is ambiguous → ask clarification
-- Never hallucinate availability
+- NEVER hallucinate availability or say "busy"/"available" without calling tools
+- ALWAYS call CHECK_AVAILABILITY tool before saying anything about availability
 - NEVER say: "I can't check meetings" → You MUST use tools
+- IF USER CONFIRMS scheduling → MUST call CHECK_AVAILABILITY tool first
 
 ---
 
@@ -177,17 +174,23 @@ Focus on: Intent, Date/Time, Duration, and Confirmations.
 def summarize_history(messages: List[Dict]) -> str:
     """Summarizes history if it gets too long to save tokens."""
     try:
-        # Use Gemini for summarization as it's usually cheaper/faster for this
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # Use OpenRouter for summarization
         text_to_summarize = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
-        response = model.generate_content(f"{SUMMARIZATION_PROMPT}\n\nHistory:\n{text_to_summarize}")
-        return response.text if response.text else "Previously discussed scheduling."
+        response = openrouter_client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SUMMARIZATION_PROMPT},
+                {"role": "user", "content": f"History:\n{text_to_summarize}"}
+            ],
+            max_tokens=200
+        )
+        return response.choices[0].message.content.strip() if response.choices[0].message.content else "Previously discussed scheduling."
     except:
         return "Context: Scheduling in progress."
 
 def get_ai_response(messages: List[Dict]):
     """
-    Sends history to AI with fallback logic: Gemini -> Claude -> Error.
+    Sends history to OpenRouter AI service only.
     Summarizes history if > 6 messages (3+ turns).
     """
     from datetime import datetime
@@ -203,85 +206,26 @@ def get_ai_response(messages: List[Dict]):
             messages[-1]  # Most recent context
         ]
 
-    # 2. Try Gemini
+    # 2. Use OpenRouter only
     try:
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro", # Using Pro as Flash often has lower quota
-            system_instruction=dynamic_system_prompt,
-            generation_config={"response_mime_type": "application/json"}
+        response = openrouter_client.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": dynamic_system_prompt},
+                *messages
+            ],
+            response_format={"type": "json_object"}
         )
-        gemini_history = []
-        for msg in messages:
-            role = "user" if msg["role"] in ["user", "system"] else "model"
-            gemini_history.append({"role": role, "parts": [msg["content"]]})
-        
-        last_msg = gemini_history.pop()
-        chat = model.start_chat(history=gemini_history)
-        response = chat.send_message(last_msg["parts"][0])
-        return json.loads(response.text.strip())
-        
+        return json.loads(response.choices[0].message.content.strip())
     except Exception as e:
-        print(f"Gemini failed or quota reached: {e}")
-        
-        # 3. Fallback to Claude (Anthropic)
-        try:
-            print("Falling back to Claude...")
-            # Prepare messages for Claude (it doesn't like system messages in history usually)
-            claude_messages = []
-            for msg in messages:
-                if msg["role"] == "system": continue
-                claude_messages.append({"role": msg["role"] if msg["role"] == "user" else "assistant", "content": msg["content"]})
-            
-            response = anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=1000,
-                system=dynamic_system_prompt,
-                messages=claude_messages
-            )
-            content = response.content[0].text.strip()
-            # Clean possible markdown
-            content = re.sub(r'^```json\s*|```$', '', content, flags=re.MULTILINE)
-            return json.loads(content)
-            
-        except Exception as e:
-            print(f"Claude failed or quota reached: {e}")
-            
-            # 4. Fallback to OpenAI
-            try:
-                print("Falling back to OpenAI...")
-                response = openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": dynamic_system_prompt},
-                        *messages
-                    ],
-                    response_format={"type": "json_object"}
-                )
-                return json.loads(response.choices[0].message.content.strip())
-            except Exception as e:
-                print(f"OpenAI failed or quota reached: {e}")
-                
-                # 5. Fallback to OpenRouter (GPT-4o-Mini)
-                try:
-                    print("Falling back to OpenRouter...")
-                    response = openrouter_client.chat.completions.create(
-                        model="openai/gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": dynamic_system_prompt},
-                            *messages
-                        ],
-                        response_format={"type": "json_object"}
-                    )
-                    return json.loads(response.choices[0].message.content.strip())
-                except Exception as e:
-                    print(f"OpenRouter failed: {e}")
-                    return {
-                        "intent": "UNKNOWN",
-                        "message": "Quota reached for all AI services. Please try again later.",
-                        "action": "ERROR",
-                        "tool": None,
-                        "parameters": {}
-                    }
+        print(f"OpenRouter failed: {e}")
+        return {
+            "intent": "UNKNOWN",
+            "message": "AI service unavailable. Please try again later.",
+            "action": "ERROR",
+            "tool": None,
+            "parameters": {}
+        }
 
 if __name__ == "__main__":
     test_history = [{"role": "user", "content": "Schedule meeting tomorrow at 10am"}]

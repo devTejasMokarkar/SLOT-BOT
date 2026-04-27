@@ -570,3 +570,5 @@ source venv/bin/activate && python3 test_cli.py
 <!-- kill port -->
 
 lsof -ti:8001 | xargs kill -9 2>/dev/null || true
+
+schedule meeting for today 5 pm

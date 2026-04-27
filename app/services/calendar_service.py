@@ -27,7 +27,8 @@ def get_calendar_service():
             if not os.path.exists(CREDENTIALS_FILE):
                 raise FileNotFoundError(f"Credentials file '{CREDENTIALS_FILE}' not found. Please download it from Google Cloud Console.")
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=8080)
+            flow.run_local_server(port=8080, access_type='offline', prompt='consent')
+            creds = flow.credentials
         
         with open(TOKEN_FILE, 'w') as token:
             token.write(creds.to_json())
@@ -38,6 +39,10 @@ def create_calendar_event(start_time, summary="Meeting", duration_minutes=30):
     try:
         service = get_calendar_service()
         
+        # Handle None duration
+        if duration_minutes is None:
+            duration_minutes = 30
+            
         start_datetime = datetime.fromisoformat(start_time)
         end_datetime = start_datetime + timedelta(minutes=duration_minutes)
         
@@ -79,12 +84,16 @@ def check_availability(start_time: str, duration_minutes: int = 30):
     try:
         service = get_calendar_service()
         
+        # Handle None duration
+        if duration_minutes is None:
+            duration_minutes = 30
+            
         start_datetime = datetime.fromisoformat(start_time)
         end_datetime = start_datetime + timedelta(minutes=duration_minutes)
         
         body = {
-            "timeMin": start_datetime.isoformat() + "Z",
-            "timeMax": end_datetime.isoformat() + "Z",
+            "timeMin": start_datetime.isoformat() + "+05:30",
+            "timeMax": end_datetime.isoformat() + "+05:30",
             "items": [{"id": "primary"}]
         }
         
