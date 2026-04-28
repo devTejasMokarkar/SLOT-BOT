@@ -7,6 +7,80 @@ import openai
 
 load_dotenv()
 
+def extract_meeting_title(user_message: str) -> str:
+    """
+    Extract meeting title from natural language input following the SMART CONTEXT rules.
+    
+    Examples:
+    "schedule meeting tomorrow 5 pm for milestone card" → "milestone card meet"
+    "book meeting about project sync at 4 pm" → "project sync meet"
+    "schedule meeting tomorrow 3 pm" → "Meeting" (fallback)
+    """
+    message_lower = user_message.lower()
+    
+    # Keywords that indicate title context
+    title_keywords = ["for", "about", "regarding", "on"]
+    
+    for keyword in title_keywords:
+        # Look for pattern: keyword + <title phrase>
+        # More flexible pattern that handles time references better
+        pattern = rf'{keyword}\s+([^,.(]+?)(?:\s+(?:with|and|tomorrow|today|at|on|in|$|,|\.)|$)'
+        match = re.search(pattern, message_lower)
+        if match:
+            title_phrase = match.group(1).strip()
+            # Clean up the phrase - remove time-related words
+            title_phrase = re.sub(r'\b(at|on|in|with|and|tomorrow|today|\d{1,2}(:\d{2})?\s*(am|pm))\b', '', title_phrase).strip()
+            
+            # Remove extra words that don't belong to title
+            title_phrase = re.sub(r'\b(meeting|schedule|book|appointment)\b', '', title_phrase).strip()
+            
+            if title_phrase and len(title_phrase) > 1:
+                return f"{title_phrase} meet"
+    
+    # Fallback: Look for meaningful phrases without keywords
+    # Try to find noun phrases that could be titles
+    patterns = [
+        r'meeting\s+(.+?)\s+(?:tomorrow|today|at|on|in|with|$)',
+        r'book\s+(.+?)\s+(?:tomorrow|today|at|on|in|with|$)',
+        r'schedule\s+(.+?)\s+(?:tomorrow|today|at|on|in|with|$)'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            title_phrase = match.group(1).strip()
+            # Clean up
+            title_phrase = re.sub(r'\b(at|on|in|with|and|tomorrow|today|\d{1,2}(:\d{2})?\s*(am|pm))\b', '', title_phrase).strip()
+            title_phrase = re.sub(r'\b(meeting|schedule|book|appointment)\b', '', title_phrase).strip()
+            
+            if title_phrase and len(title_phrase) > 1:
+                return f"{title_phrase} meet"
+    
+    # Final fallback
+    return "Meeting"
+
+def extract_email_attendees(user_message: str) -> List[str]:
+    """
+    Extract email addresses from natural language input.
+    
+    Example:
+    "schedule meeting tomorrow 5 pm for milestone card with john@gmail.com and test@company.com"
+    → ["john@gmail.com", "test@company.com"]
+    """
+    # Email regex pattern
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    emails = re.findall(email_pattern, user_message)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_emails = []
+    for email in emails:
+        if email.lower() not in seen:
+            seen.add(email.lower())
+            unique_emails.append(email)
+    
+    return unique_emails
+
 # Initialize only OpenRouter client
 openrouter_client = openai.OpenAI(
     base_url="https://openrouter.ai/api/v1",

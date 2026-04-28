@@ -43,7 +43,7 @@ import json
 import re
 from datetime import datetime
 from typing import Dict, Optional, List
-from app.services.ai_service import get_ai_response
+from app.services.ai_service import get_ai_response, extract_meeting_title, extract_email_attendees
 from app.services.calendar_service import create_calendar_event, check_availability
 
 class SlotBotStateMachine:
@@ -52,7 +52,14 @@ class SlotBotStateMachine:
         self.state = "COLLECTING_DETAILS"
         self.stored_datetime = None
         self.stored_duration = 30
+        self.stored_title = None
+        self.stored_attendees = []
         self.last_response = None
+        
+        # Context memory fields for intelligent merging
+        self.stored_intent = None
+        self.stored_date = None
+        self.stored_time = None
         
     def is_confirmation(self, message: str) -> bool:
         """Check if message is a confirmation"""
@@ -70,11 +77,98 @@ class SlotBotStateMachine:
         except:
             return False
     
+    def detect_partial_input(self, message: str) -> Dict:
+        """Detect if user is providing partial date/time input"""
+        message_lower = message.lower()
+        
+        # Detect time patterns
+        has_time = bool(re.search(r'\d{1,2}(:\d{2})?\s*(am|pm)', message_lower))
+        
+        # Detect date patterns
+        date_keywords = [
+            "today", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+            "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"
+        ]
+        has_date = any(word in message_lower for word in date_keywords)
+        has_full_date = bool(re.search(r'\d{4}-\d{2}-\d{2}', message_lower))
+        
+        # Detect relative date patterns
+        has_relative_date = any(word in message_lower for word in ["next week", "next month", "next"])
+        
+        # Check if this is a time-only response (very short, just time)
+        is_time_only = has_time and len(message_lower.strip()) < 15 and not has_date
+        
+        # Check if this is a date-only response 
+        is_date_only = (has_date or has_full_date or has_relative_date) and not has_time
+        
+        return {
+            "has_time": has_time,
+            "has_date": has_date or has_full_date or has_relative_date,
+            "is_partial": has_time or has_date,
+            "is_time_only": is_time_only,
+            "is_date_only": is_date_only
+        }
+    
+    def merge_context(self, current_message: str, ai_response: Dict) -> Dict:
+        """Intelligent context merging for partial updates"""
+        partial_info = self.detect_partial_input(current_message)
+        extracted_dt = ai_response.get("datetime")
+        
+        # If we have stored context and this is partial input
+        if self.stored_datetime and partial_info["is_partial"]:
+            try:
+                stored_dt = datetime.fromisoformat(self.stored_datetime.replace('Z', '+00:00'))
+                new_dt = datetime.fromisoformat(extracted_dt.replace('Z', '+00:00')) if extracted_dt and extracted_dt != "null" else None
+                
+                if new_dt:
+                    # CASE 1: User provides ONLY time - keep date, update time
+                    if partial_info["has_time"] and not partial_info["has_date"]:
+                        merged_dt = stored_dt.replace(
+                            hour=new_dt.hour,
+                            minute=new_dt.minute,
+                            second=new_dt.second
+                        )
+                        return {**ai_response, "datetime": merged_dt.isoformat()}
+                    
+                    # CASE 2: User provides ONLY date - keep time, update date
+                    elif partial_info["has_date"] and not partial_info["has_time"]:
+                        merged_dt = new_dt.replace(
+                            hour=stored_dt.hour,
+                            minute=stored_dt.minute,
+                            second=stored_dt.second
+                        )
+                        return {**ai_response, "datetime": merged_dt.isoformat()}
+                    
+                    # CASE 3: User provides both - replace completely
+                    else:
+                        return ai_response
+            except:
+                pass  # Fall back to original response if merging fails
+        
+        return ai_response
+    
     def format_response(self, message: str, action: str, tool: str = None, parameters: Dict = None, datetime_str: str = None) -> Dict:
         """Format response according to specification"""
+        # Extract date and time from datetime for response
+        response_datetime = datetime_str or self.stored_datetime or ""
+        response_date = ""
+        response_time = ""
+        
+        if response_datetime and response_datetime != "null":
+            try:
+                dt = datetime.fromisoformat(response_datetime.replace('Z', '+00:00'))
+                response_date = dt.date().isoformat()
+                response_time = dt.time().isoformat()
+            except:
+                pass
+        
         response = {
-            "intent": "SCHEDULE",
-            "datetime": datetime_str or self.stored_datetime or "",
+            "intent": self.stored_intent or "SCHEDULE",
+            "date": response_date,
+            "time": response_time,
+            "datetime": response_datetime,
+            "title": self.stored_title or "",
+            "attendees": self.stored_attendees or [],
             "message": message,
             "action": action,
             "tool": tool,
@@ -160,6 +254,9 @@ class SlotBotStateMachine:
                 None, None, None
             )
         
+        # Apply intelligent context merging for partial updates
+        ai_response = self.merge_context(message, ai_response)
+        
         intent = ai_response.get("intent", "UNKNOWN")
         extracted_dt = ai_response.get("datetime")
         
@@ -201,6 +298,20 @@ class SlotBotStateMachine:
         # CONTEXT LOCK RULE: Store the extracted datetime and duration
         self.stored_datetime = extracted_dt
         self.stored_duration = ai_response.get("duration_minutes", 30)
+        
+        # Store intent and separate date/time components for context merging
+        self.stored_intent = intent
+        if extracted_dt and extracted_dt != "null":
+            try:
+                dt = datetime.fromisoformat(extracted_dt.replace('Z', '+00:00'))
+                self.stored_date = dt.date().isoformat()
+                self.stored_time = dt.time().isoformat()
+            except:
+                pass
+        
+        # Extract title and attendees from the original message
+        self.stored_title = extract_meeting_title(message)
+        self.stored_attendees = extract_email_attendees(message)
         
         # CONFIRM ONLY WHEN DATA IS COMPLETE: Check if we have complete datetime
         if not self.has_complete_datetime(extracted_dt):
@@ -315,7 +426,9 @@ class SlotBotStateMachine:
             "CREATE_MEETING",
             {
                 "datetime": self.stored_datetime,
-                "duration": self.stored_duration
+                "duration": self.stored_duration,
+                "title": self.stored_title or "Meeting",
+                "attendees": self.stored_attendees
             }
         )
     

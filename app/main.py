@@ -110,6 +110,8 @@ async def chat(req: ChatRequest):
             if tool_name == "CREATE_MEETING":
                 dt = params.get("datetime")
                 dur = params.get("duration", 30)
+                title = params.get("title", "Meeting")
+                attendees = params.get("attendees", [])
                 
                 # Additional validation before creating
                 if not dt or dt == "null":
@@ -122,7 +124,7 @@ async def chat(req: ChatRequest):
                         session_id=session_id
                     )
                 
-                res = create_meeting_with_attendees(dt, "Meeting", [], dur)
+                res = create_meeting_with_attendees(dt, title, attendees, dur)
                 if res.get("success"):
                     event_id = res.get("event_id")
                     event_link = res.get("event_link")
