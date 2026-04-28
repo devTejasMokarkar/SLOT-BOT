@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2 } from 'lucide-react';
 import { apiService } from '../services/api';
+import TypingIndicator from './TypingIndicator';
+import { getStatusMessage } from '../utils/statusMessages';
 
 const ChatMode = () => {
   const [messages, setMessages] = useState([
@@ -12,6 +14,7 @@ const ChatMode = () => {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const [sessionId] = useState(() => `user_${Date.now()}`);
   const messagesEndRef = useRef(null);
 
@@ -36,6 +39,7 @@ const ChatMode = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
+    setStatusMessage(getStatusMessage(inputMessage.trim()));
 
     try {
       const response = await apiService.chat(inputMessage.trim(), sessionId);
@@ -58,6 +62,7 @@ const ChatMode = () => {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setStatusMessage('');
     }
   };
 
@@ -125,14 +130,7 @@ const ChatMode = () => {
         ))}
         
         {isLoading && (
-          <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center">
-              <Bot className="w-4 h-4 text-white" />
-            </div>
-            <div className="bg-gray-100 rounded-lg px-4 py-2">
-              <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
-            </div>
-          </div>
+          <TypingIndicator statusMessage={statusMessage} />
         )}
         
         <div ref={messagesEndRef} />

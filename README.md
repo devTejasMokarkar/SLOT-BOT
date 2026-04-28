@@ -558,18 +558,32 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
 This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
 
 
-<!-- run project -->
+## 🚀 **Development Commands**
 
-
+### **Run Project**
+```bash
+# Start the backend server
 venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
-<!-- test slotbot -->
+# Start the frontend (in separate terminal)
+cd web && npm start
+```
 
+### **Test SlotBot**
+```bash
+# Run CLI interface for testing
 source venv/bin/activate && python3 cli.py
+```
 
-<!-- kill port -->
-
+### **Port Management**
+```bash
+# Kill process on port 8001
 lsof -ti:8001 | xargs kill -9 2>/dev/null || true
+```
 
+### **Example Commands**
+```bash
+# Sample scheduling requests
 schedule meeting for today 5 pm
 schedule meeting december 5 2026 at time 5 pm
+```

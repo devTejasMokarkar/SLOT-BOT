@@ -131,7 +131,7 @@ function App() {
           <div className="flex items-center justify-between text-sm text-gray-500">
             <div className="flex items-center space-x-2">
               <CheckCircle className="w-4 h-4 text-success-500" />
-              <span>Powered by PINNACLE AI</span>
+              <span>Powered by Pinnacle AI</span>
             </div>
             <div className="flex items-center space-x-4">
               <span>© 2026 SlotBot</span>
