@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, CheckCircle, XCircle, Loader2, Users, CalendarDays } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, Loader2, Users, CalendarDays, Plus, X } from 'lucide-react';
 import { apiService } from '../services/api';
 
 const SchedulerMode = () => {
   const [step, setStep] = useState(1); // 1: Type selection, 2: Date selection, 3: Slot selection, 4: Confirmation
-  const [type, setType] = useState(''); // 'appointment' | 'meeting'
+  const [type, setType] = useState(''); // 'meeting'
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState('');
   const [availableSlots, setAvailableSlots] = useState([]);
@@ -12,6 +12,8 @@ const SchedulerMode = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [eventLink, setEventLink] = useState('');
+  const [participants, setParticipants] = useState([]);
+  const [emailInput, setEmailInput] = useState('');
 
   // Get today's date in YYYY-MM-DD format for min date
   const today = new Date().toISOString().split('T')[0];
@@ -48,6 +50,30 @@ const SchedulerMode = () => {
     setSelectedSlot(slot);
   };
 
+  const addParticipant = () => {
+    const email = emailInput.trim();
+    if (email && isValidEmail(email) && !participants.includes(email)) {
+      setParticipants([...participants, email]);
+      setEmailInput('');
+    }
+  };
+
+  const removeParticipant = (email) => {
+    setParticipants(participants.filter(p => p !== email));
+  };
+
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleEmailKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addParticipant();
+    }
+  };
+
   const handleSchedule = async () => {
     if (!selectedDate || !selectedSlot) return;
 
@@ -82,34 +108,18 @@ const SchedulerMode = () => {
     setBookedSlots([]);
     setError('');
     setEventLink('');
+    setParticipants([]);
+    setEmailInput('');
   };
 
   const renderStep1 = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">What would you like to schedule?</h3>
-        <p className="text-sm text-gray-600">Choose the type of booking you need</p>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Schedule a Meeting</h3>
+        <p className="text-sm text-gray-600">Select a date and time for your meeting</p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <button
-          onClick={() => {
-            setType('appointment');
-            setStep(2);
-          }}
-          className="card p-6 hover:shadow-lg transition-shadow duration-200 text-left group"
-        >
-          <div className="flex items-center space-x-4">
-            <div className="bg-blue-100 p-3 rounded-lg group-hover:bg-blue-200 transition-colors">
-              <CalendarDays className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900">Appointment</h4>
-              <p className="text-sm text-gray-600">One-on-one session</p>
-            </div>
-          </div>
-        </button>
-
+      <div className="grid grid-cols-1 gap-4">
         <button
           onClick={() => {
             setType('meeting');
@@ -123,7 +133,7 @@ const SchedulerMode = () => {
             </div>
             <div>
               <h4 className="font-semibold text-gray-900">Meeting</h4>
-              <p className="text-sm text-gray-600">Group discussion</p>
+              <p className="text-sm text-gray-600">Schedule your meeting</p>
             </div>
           </div>
         </button>
@@ -135,7 +145,7 @@ const SchedulerMode = () => {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Select Date</h3>
-        <p className="text-sm text-gray-600">Choose your preferred date for your {type}</p>
+        <p className="text-sm text-gray-600">Choose your preferred date for your meeting</p>
       </div>
 
       <div className="card p-6">
@@ -146,11 +156,57 @@ const SchedulerMode = () => {
         <input
           id="date-picker"
           type="date"
-          value={selectedDate}
+          value={selectedDate || today}
           onChange={(e) => handleDateChange(e.target.value)}
           min={today}
           className="input-field"
         />
+      </div>
+
+      <div className="card p-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          <Users className="inline w-4 h-4 mr-2" />
+          Add Participants (Emails) - Optional
+        </label>
+        
+        <div className="space-y-3">
+          <div className="flex space-x-2">
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              onKeyPress={handleEmailKeyPress}
+              placeholder="Enter email address"
+              className="flex-1 input-field"
+            />
+            <button
+              onClick={addParticipant}
+              disabled={!isValidEmail(emailInput) || participants.includes(emailInput)}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed p-2"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          
+          {participants.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {participants.map((email) => (
+                <div
+                  key={email}
+                  className="inline-flex items-center space-x-1 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-sm"
+                >
+                  <span>{email}</span>
+                  <button
+                    onClick={() => removeParticipant(email)}
+                    className="text-primary-600 hover:text-primary-800"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <button

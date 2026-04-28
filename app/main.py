@@ -6,7 +6,7 @@ from typing import List, Optional, Dict
 from fastapi import FastAPI
 from pydantic import BaseModel
 from app.services.ai_service import get_ai_response
-from app.services.calendar_service import create_calendar_event, check_availability, suggest_slots, list_meetings, cancel_meeting, create_meeting_tool, list_available_slots
+from app.services.calendar_service import create_calendar_event, check_availability, suggest_slots, list_meetings, cancel_meeting, create_meeting_tool, list_available_slots, create_meeting_with_attendees
 from app.services.slotbot_state_machine import process_slotbot_message
 from app.services.slotbot_ui_state_machine import process_slotbot_ui_message
 from app.utils.validation import validate_meeting_request
@@ -20,6 +20,23 @@ app = FastAPI(
     description="Intelligent multi-turn appointment scheduling",
     version="2.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information"""
+    logger.info("=" * 60)
+    logger.info("🚀 SLOTBOT BACKEND STARTED")
+    logger.info("=" * 60)
+    logger.info("📍 Backend URL: http://localhost:8001")
+    logger.info("📚 API Docs: http://localhost:8001/docs")
+    logger.info("🔍 Health Check: http://localhost:8001/health")
+    logger.info("🎯 Smart Scheduler Endpoints:")
+    logger.info("   • POST /direct-schedule - Direct meeting scheduling")
+    logger.info("   • POST /list-available-slots - Get available slots")
+    logger.info("   • POST /ui-chat - UI-driven chat interface")
+    logger.info("=" * 60)
+    logger.info("✅ Backend ready for connections!")
+    logger.info("=" * 60)
 
 # Add CORS middleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -263,6 +280,8 @@ class DirectScheduleRequest(BaseModel):
     date: str
     slot: str
     session_id: str = "default"
+    title: str = "Meeting"
+    attendees: List[str] = []
 
 @app.post("/direct-schedule", response_model=UIChatResponse)
 async def direct_schedule(req: DirectScheduleRequest):
@@ -276,9 +295,10 @@ async def direct_schedule(req: DirectScheduleRequest):
         datetime_str = f"{datetime_obj.strftime('%Y-%m-%dT%H:%M:%S')}+05:30"
         
         logger.info(f"Direct scheduling: {req.date} {req.slot} -> {datetime_str}")
+        logger.info(f"Title: {req.title}, Attendees: {req.attendees}")
         
-        # Create meeting directly
-        result = create_meeting_tool(datetime_str, 30)
+        # Create meeting directly with title and attendees
+        result = create_meeting_with_attendees(datetime_str, req.title, req.attendees)
         
         if result.get("success"):
             return UIChatResponse(

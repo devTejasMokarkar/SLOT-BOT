@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime, timedelta
+from typing import List
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -253,4 +254,59 @@ def create_meeting_tool(datetime_str: str, duration_minutes: int = 30):
             "success": False,
             "message": result['message'],
             "error": result['error']
+        }
+
+def create_meeting_with_attendees(datetime_str: str, title: str = "Meeting", attendees: List[str] = None, duration_minutes: int = 30):
+    """
+    Create meeting with custom title and attendees
+    """
+    if attendees is None:
+        attendees = []
+    
+    try:
+        service = get_calendar_service()
+        
+        # Handle None duration
+        if duration_minutes is None:
+            duration_minutes = 30
+            
+        start_datetime = datetime.fromisoformat(datetime_str)
+        end_datetime = start_datetime + timedelta(minutes=duration_minutes)
+        
+        event = {
+            'summary': title,
+            'start': {
+                'dateTime': start_datetime.isoformat(),
+                'timeZone': 'IST',
+            },
+            'end': {
+                'dateTime': end_datetime.isoformat(),
+                'timeZone': 'IST',
+            },
+        }
+        
+        # Add attendees if provided
+        if attendees:
+            event['attendees'] = [{'email': email} for email in attendees]
+        
+        event = service.events().insert(calendarId='primary', body=event, sendUpdates='all').execute()
+        
+        return {
+            'success': True,
+            'event_id': event['id'],
+            'event_link': event['htmlLink'],
+            'message': f"Event '{title}' created successfully for {start_datetime.strftime('%Y-%m-%d %H:%M')}"
+        }
+        
+    except HttpError as e:
+        return {
+            'success': False,
+            'error': f"Calendar API error: {e}",
+            'message': "Failed to create calendar event"
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f"Unexpected error: {e}",
+            'message': "Failed to create calendar event"
         }
