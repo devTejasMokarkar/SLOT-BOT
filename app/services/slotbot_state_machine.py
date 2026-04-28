@@ -130,6 +130,16 @@ class SlotBotStateMachine:
         if self.stored_datetime and (":" in message_lower or "am" in message_lower or "pm" in message_lower or any(month in message_lower for month in ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])):
             # User is providing time/date modification, update stored datetime
             ai_response = get_ai_response([{"role": "user", "content": f"Schedule meeting {message}"}])
+            
+            # Check for AI service errors
+            if ai_response.get("action") == "ERROR":
+                # Propagate AI service errors (like authentication issues)
+                return self.format_response(
+                    ai_response.get("message"),
+                    "ERROR",
+                    None, None, None
+                )
+            
             new_dt = ai_response.get("datetime")
             if new_dt and new_dt != "null":
                 self.stored_datetime = new_dt
@@ -140,6 +150,15 @@ class SlotBotStateMachine:
         
         # Get AI response to extract intent and datetime
         ai_response = get_ai_response([{"role": "user", "content": message}])
+        
+        # Check for AI service errors
+        if ai_response.get("action") == "ERROR":
+            # Propagate AI service errors (like authentication issues)
+            return self.format_response(
+                ai_response.get("message"),
+                "ERROR",
+                None, None, None
+            )
         
         intent = ai_response.get("intent", "UNKNOWN")
         extracted_dt = ai_response.get("datetime")

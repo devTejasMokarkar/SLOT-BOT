@@ -185,7 +185,10 @@ def summarize_history(messages: List[Dict]) -> str:
             max_tokens=200
         )
         return response.choices[0].message.content.strip() if response.choices[0].message.content else "Previously discussed scheduling."
-    except:
+    except Exception as e:
+        error_str = str(e).lower()
+        if "401" in error_str or "unauthorized" in error_str or "user not found" in error_str:
+            return "Context: Scheduling in progress (API auth issue)."
         return "Context: Scheduling in progress."
 
 def get_ai_response(messages: List[Dict]):
@@ -221,13 +224,33 @@ def get_ai_response(messages: List[Dict]):
         return json.loads(response.choices[0].message.content.strip())
     except Exception as e:
         print(f"OpenRouter failed: {e}")
-        return {
-            "intent": "UNKNOWN",
-            "message": "AI service unavailable. Please try again later.",
-            "action": "ERROR",
-            "tool": None,
-            "parameters": {}
-        }
+        error_str = str(e).lower()
+        
+        # Check for authentication errors
+        if "401" in error_str or "unauthorized" in error_str or "user not found" in error_str:
+            return {
+                "intent": "UNKNOWN",
+                "message": "🔑 Authentication tokens have expired or are invalid. Please refresh your API keys and try again later.",
+                "action": "ERROR",
+                "tool": None,
+                "parameters": {}
+            }
+        elif "429" in error_str or "rate limit" in error_str:
+            return {
+                "intent": "UNKNOWN", 
+                "message": "⏱️ Rate limit exceeded. Please try again in a few moments.",
+                "action": "ERROR",
+                "tool": None,
+                "parameters": {}
+            }
+        else:
+            return {
+                "intent": "UNKNOWN",
+                "message": "🤖 AI service temporarily unavailable. Please try again later.",
+                "action": "ERROR",
+                "tool": None,
+                "parameters": {}
+            }
 
 if __name__ == "__main__":
     test_history = [{"role": "user", "content": "Schedule meeting tomorrow at 10am"}]
