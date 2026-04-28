@@ -572,3 +572,4 @@ source venv/bin/activate && python3 cli.py
 lsof -ti:8001 | xargs kill -9 2>/dev/null || true
 
 schedule meeting for today 5 pm
+schedule meeting december 5 2026 at time 5 pm
