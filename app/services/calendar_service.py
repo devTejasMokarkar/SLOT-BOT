@@ -174,3 +174,83 @@ def cancel_meeting(event_id: str):
         return f"ERROR: Calendar API error: {e}"
     except Exception as e:
         return f"ERROR: Unexpected error: {e}"
+
+def list_available_slots(date_str: str):
+    """
+    Fetch available and booked slots for a given date
+    Returns structured data with available_slots and booked_slots lists
+    """
+    try:
+        service = get_calendar_service()
+        
+        # Parse the date and ensure we span the whole day in IST
+        start_datetime = datetime.fromisoformat(f"{date_str}T00:00:00+05:30")
+        end_datetime = start_datetime + timedelta(days=1)
+        
+        events_result = service.events().list(
+            calendarId='primary', 
+            timeMin=start_datetime.isoformat(), 
+            timeMax=end_datetime.isoformat(),
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        
+        events = events_result.get('items', [])
+        
+        # Generate standard time slots (9 AM to 6 PM, 30-minute intervals)
+        all_slots = []
+        current_time = start_datetime.replace(hour=9, minute=0, second=0, microsecond=0)
+        end_of_day = start_datetime.replace(hour=18, minute=0, second=0, microsecond=0)
+        
+        while current_time < end_of_day:
+            slot_time = current_time.strftime('%I:%M %p')
+            all_slots.append(slot_time)
+            current_time += timedelta(minutes=30)
+        
+        # Extract booked slots from existing events
+        booked_slots = []
+        for event in events:
+            start = event['start'].get('dateTime', event['start'].get('date'))
+            if 'T' in start:  # It's a datetime event
+                event_time = datetime.fromisoformat(start)
+                slot_time = event_time.strftime('%I:%M %p')
+                booked_slots.append(slot_time)
+        
+        # Available slots are those not in booked_slots
+        available_slots = [slot for slot in all_slots if slot not in booked_slots]
+        
+        return {
+            "available_slots": available_slots,
+            "booked_slots": booked_slots
+        }
+        
+    except Exception as e:
+        print(f"Error fetching slots: {e}")
+        # Return default slots on error
+        default_slots = ["09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM", 
+                        "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM", "02:00 PM", "02:30 PM",
+                        "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM", "05:00 PM", "05:30 PM"]
+        return {
+            "available_slots": default_slots,
+            "booked_slots": []
+        }
+
+def create_meeting_tool(datetime_str: str, duration_minutes: int = 30):
+    """
+    Tool function for creating meetings - wrapper around create_calendar_event
+    """
+    result = create_calendar_event(datetime_str, "Meeting", duration_minutes)
+    
+    if result['success']:
+        return {
+            "success": True,
+            "message": result['message'],
+            "event_id": result['event_id'],
+            "event_link": result['event_link']
+        }
+    else:
+        return {
+            "success": False,
+            "message": result['message'],
+            "error": result['error']
+        }

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SlotBot - AI Scheduling Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .chat-container {
+            padding: 30px;
+            min-height: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .bot-message {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+        }
+
+        .user-message {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            text-align: right;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+
+        .slot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .slot-btn {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .slot-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .slot-btn.available {
+            border-color: #28a745;
+            color: #28a745;
+        }
+
+        .slot-btn.available:hover {
+            background: #d4edda;
+        }
+
+        .slot-btn.booked {
+            border-color: #dc3545;
+            color: #dc3545;
+            background: #f8d7da;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .date-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+
+        .date-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .event-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .event-link:hover {
+            background: #0056b3;
+            text-decoration: none;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 SlotBot</h1>
+            <p>AI-Powered Scheduling Assistant</p>
+        </div>
+        
+        <div class="chat-container" id="chatContainer">
+            <div class="message bot-message">
+                <strong>SlotBot:</strong> Welcome! I'm your AI scheduling assistant. What would you like to do?
+            </div>
+            
+            <div class="actions" id="initialActions">
+                <button class="btn btn-primary" onclick="selectAction('schedule_appointment')">
+                    📅 Schedule Appointment
+                </button>
+                <button class="btn btn-secondary" onclick="selectAction('check_availability')">
+                    👁️ Check Availability
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentSession = 'browser_' + Date.now();
+        let currentState = '';
+
+        async function sendRequest(data) {
+            try {
+                const response = await fetch(`${API_BASE}/ui-chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Error:', error);
+                return {
+                    message: '❌ Error connecting to server. Please make sure the server is running.',
+                    action: 'ERROR'
+                };
+            }
+        }
+
+        function addMessage(content, isUser = false) {
+            const container = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            messageDiv.innerHTML = `<strong>${isUser ? 'You' : 'SlotBot'}:</strong> ${content}`;
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearActions() {
+            const existingActions = document.querySelectorAll('.actions');
+            existingActions.forEach(action => action.remove());
+        }
+
+        function createActionContainer() {
+            clearActions();
+            const container = document.getElementById('chatContainer');
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'actions';
+            container.appendChild(actionsDiv);
+            return actionsDiv;
+        }
+
+        async function selectAction(action) {
+            addMessage(`Selected: ${action === 'schedule_appointment' ? 'Schedule Appointment' : 'Check Availability'}`, true);
+            
+            const actionsDiv = createActionContainer();
+            actionsDiv.innerHTML = '<div class="loading"></div> Processing...';
+            
+            const response = await sendRequest({
+                session_id: currentSession,
+                selected_action: action
+            });
+            
+            processResponse(response);
+        }
+
+        async function selectDate(date) {
+            addMessage(`Selected date: ${date}`, true);
+            
+            const actionsDiv = createActionContainer();
+            actionsDiv.innerHTML = '<div class="loading"></div> Fetching slots...';
+            
+            const response = await sendRequest({
+                session_id: currentSession,
+                selected_date: date
+            });
+            
+            processResponse(response);
+        }
+
+        async function selectSlot(slot) {
+            addMessage(`Selected slot: ${slot}`, true);
+            
+            const actionsDiv = createActionContainer();
+            actionsDiv.innerHTML = '<div class="loading"></div> Processing...';
+            
+            const response = await sendRequest({
+                session_id: currentSession,
+                selected_slot: slot
+            });
+            
+            processResponse(response);
+        }
+
+        async function sendConfirmation(message) {
+            addMessage(message, true);
+            
+            const actionsDiv = createActionContainer();
+            actionsDiv.innerHTML = '<div class="loading"></div> Creating meeting...';
+            
+            const response = await sendRequest({
+                session_id: currentSession,
+                message: message
+            });
+            
+            processResponse(response);
+        }
+
+        function processResponse(response) {
+            currentState = response.action;
+            clearActions();
+            
+            // Add bot message
+            addMessage(response.message);
+            
+            const actionsDiv = createActionContainer();
+            
+            switch(response.action) {
+                case 'ASK':
+                    if (response.message.includes('date')) {
+                        // Show date picker
+                        actionsDiv.innerHTML = `
+                            <input type="date" class="date-input" id="datePicker" onchange="selectDate(this.value)">
+                            <button class="btn btn-primary" onclick="selectDate(document.getElementById('datePicker').value)">
+                                Select Date
+                            </button>
+                        `;
+                        // Set default date to today
+                        const today = new Date().toISOString().split('T')[0];
+                        document.getElementById('datePicker').value = today;
+                    } else if (response.message.includes('What would you like to do')) {
+                        // Show initial actions
+                        actionsDiv.innerHTML = `
+                            <button class="btn btn-primary" onclick="selectAction('schedule_appointment')">
+                                📅 Schedule Appointment
+                            </button>
+                            <button class="btn btn-secondary" onclick="selectAction('check_availability')">
+                                👁️ Check Availability
+                            </button>
+                        `;
+                    }
+                    break;
+                    
+                case 'SHOW_SLOTS':
+                    // Parse and display slots
+                    const availableSlots = response.message.match(/- (\d{1,2}:\d{2} [AP]M)/g) || [];
+                    const bookedSlots = response.message.match(/🔴[\s\S]*?🟢/) ? 
+                        response.message.split('🔴')[1].split('🟢')[0].match(/- (\d{1,2}:\d{2} [AP]M)/g) || [] : [];
+                    
+                    let slotsHTML = '';
+                    
+                    if (availableSlots.length > 0) {
+                        slotsHTML += '<h4>🟢 Available Slots:</h4><div class="slot-grid">';
+                        availableSlots.forEach(slot => {
+                            const time = slot.replace('- ', '');
+                            slotsHTML += `<button class="slot-btn available" onclick="selectSlot('${time}')">${time}</button>`;
+                        });
+                        slotsHTML += '</div>';
+                    }
+                    
+                    if (bookedSlots.length > 0) {
+                        slotsHTML += '<h4>🔴 Booked Slots:</h4><div class="slot-grid">';
+                        bookedSlots.forEach(slot => {
+                            const time = slot.replace('- ', '');
+                            slotsHTML += `<button class="slot-btn booked" disabled>${time}</button>`;
+                        });
+                        slotsHTML += '</div>';
+                    }
+                    
+                    actionsDiv.innerHTML = slotsHTML;
+                    break;
+                    
+                case 'CONFIRM':
+                    // Show confirmation buttons
+                    actionsDiv.innerHTML = `
+                        <button class="btn btn-success" onclick="sendConfirmation('yes')">
+                            ✅ Yes, Confirm
+                        </button>
+                        <button class="btn btn-danger" onclick="sendConfirmation('no')">
+                            ❌ Cancel
+                        </button>
+                    `;
+                    break;
+                    
+                case 'CALL_TOOL':
+                    // Meeting was created
+                    if (response.event_link) {
+                        actionsDiv.innerHTML = `
+                            <div class="success-message">
+                                ✅ Meeting created successfully!<br>
+                                <a href="${response.event_link}" target="_blank" class="event-link">
+                                    📅 View in Calendar
+                                </a>
+                            </div>
+                            <button class="btn btn-primary" onclick="location.reload()">
+                                🔄 Start New Booking
+                            </button>
+                        `;
+                    }
+                    break;
+                    
+                case 'COMPLETE':
+                    // Check availability complete
+                    actionsDiv.innerHTML = `
+                        <button class="btn btn-primary" onclick="location.reload()">
+                            🔄 Start New Request
+                        </button>
+                    `;
+                    break;
+                    
+                case 'ERROR':
+                    actionsDiv.innerHTML = `
+                        <div class="error-message">
+                            ${response.message}
+                        </div>
+                        <button class="btn btn-primary" onclick="location.reload()">
+                            🔄 Try Again
+                        </button>
+                    `;
+                    break;
+                    
+                default:
+                    actionsDiv.innerHTML = `
+                        <button class="btn btn-primary" onclick="location.reload()">
+                            🔄 Start Over
+                        </button>
+                    `;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('SlotBot Web Interface Ready');
+            console.log('Server should be running on:', API_BASE);
+        });
+    </script>
+</body>
+</html>
