@@ -3,9 +3,8 @@ import { Calendar, Clock, CheckCircle, XCircle, Loader2, Users, CalendarDays } f
 import { apiService } from '../services/api';
 
 const SchedulerMode = () => {
-  const [step, setStep] = useState(1); // 1: Type selection, 2: Action selection, 3: Date selection, 4: Slot selection, 5: Confirmation
+  const [step, setStep] = useState(1); // 1: Type selection, 2: Date selection, 3: Slot selection, 4: Confirmation
   const [type, setType] = useState(''); // 'appointment' | 'meeting'
-  const [action, setAction] = useState(''); // 'view_slots' | 'schedule'
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState('');
   const [availableSlots, setAvailableSlots] = useState([]);
@@ -38,6 +37,7 @@ const SchedulerMode = () => {
     setSelectedSlot('');
     if (date) {
       fetchSlots(date);
+      setStep(3); // Automatically move to slot selection
     }
   };
 
@@ -55,23 +55,16 @@ const SchedulerMode = () => {
     setError('');
 
     try {
-      // Convert to ISO format
-      apiService.slotToIso(selectedDate, selectedSlot);
+      const sessionId = `scheduler_${Date.now()}`;
       
-      // Call the UI chat endpoint for scheduling
-      const response = await apiService.uiChat({
-        message: '',
-        session_id: `scheduler_${Date.now()}`,
-        selected_action: 'schedule',
-        selected_date: selectedDate,
-        selected_slot: selectedSlot
-      });
+      // Use direct scheduling endpoint
+      const response = await apiService.directSchedule(selectedDate, selectedSlot, sessionId);
 
       if (response.event_link) {
         setEventLink(response.event_link);
-        setStep(5); // Success step
+        setStep(4); // Success step
       } else {
-        setError('Failed to schedule meeting. Please try again.');
+        setError(response.message || 'Failed to schedule meeting. Please try again.');
       }
     } catch (err) {
       setError('Failed to schedule meeting. Please try again.');
@@ -83,7 +76,6 @@ const SchedulerMode = () => {
   const resetScheduler = () => {
     setStep(1);
     setType('');
-    setAction('');
     setSelectedDate('');
     setSelectedSlot('');
     setAvailableSlots([]);
@@ -142,62 +134,8 @@ const SchedulerMode = () => {
   const renderStep2 = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">What would you like to do?</h3>
-        <p className="text-sm text-gray-600">Choose an action for your {type}</p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <button
-          onClick={() => {
-            setAction('view_slots');
-            setStep(3);
-          }}
-          className="card p-6 hover:shadow-lg transition-shadow duration-200 text-left group"
-        >
-          <div className="flex items-center space-x-4">
-            <div className="bg-purple-100 p-3 rounded-lg group-hover:bg-purple-200 transition-colors">
-              <Clock className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900">View Available Slots</h4>
-              <p className="text-sm text-gray-600">Check what times are free</p>
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => {
-            setAction('schedule');
-            setStep(3);
-          }}
-          className="card p-6 hover:shadow-lg transition-shadow duration-200 text-left group"
-        >
-          <div className="flex items-center space-x-4">
-            <div className="bg-primary-100 p-3 rounded-lg group-hover:bg-primary-200 transition-colors">
-              <Calendar className="w-6 h-6 text-primary-600" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900">Schedule {type.charAt(0).toUpperCase() + type.slice(1)}</h4>
-              <p className="text-sm text-gray-600">Book a time slot</p>
-            </div>
-          </div>
-        </button>
-      </div>
-
-      <button
-        onClick={() => setStep(1)}
-        className="btn-secondary"
-      >
-        ← Back
-      </button>
-    </div>
-  );
-
-  const renderStep3 = () => (
-    <div className="space-y-6">
-      <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Select Date</h3>
-        <p className="text-sm text-gray-600">Choose your preferred date</p>
+        <p className="text-sm text-gray-600">Choose your preferred date for your {type}</p>
       </div>
 
       <div className="card p-6">
@@ -215,31 +153,48 @@ const SchedulerMode = () => {
         />
       </div>
 
-      <div className="flex space-x-4">
-        <button
-          onClick={() => setStep(2)}
-          className="btn-secondary"
-        >
-          ← Back
-        </button>
-        {selectedDate && (
-          <button
-            onClick={() => setStep(4)}
-            className="btn-primary"
-          >
-            Continue →
-          </button>
-        )}
-      </div>
+      <button
+        onClick={() => setStep(1)}
+        className="btn-secondary"
+      >
+        ← Back
+      </button>
     </div>
   );
 
-  const renderStep4 = () => (
+  const renderStep3 = () => (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Available Time Slots</h3>
         <p className="text-sm text-gray-600">Select a time slot for {selectedDate}</p>
       </div>
+
+      {/* Smart Suggestion */}
+      {availableSlots.length > 0 && !selectedSlot && (
+        <div className="card p-4 bg-gradient-to-r from-primary-50 to-primary-100 border-primary-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">✨</span>
+              <div>
+                <p className="font-medium text-primary-900">Next Available Slot: {availableSlots[0]}</p>
+                <p className="text-sm text-primary-700">Book this slot quickly or choose another time</p>
+              </div>
+            </div>
+            <button
+              onClick={() => handleSlotSelect(availableSlots[0])}
+              className="btn-primary"
+            >
+              Book Now
+            </button>
+          </div>
+          <button
+            onClick={() => {}}
+            className="mt-3 text-sm text-primary-600 hover:text-primary-800 underline"
+          >
+            Choose Another Time ↓
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="card p-8 text-center">
@@ -305,7 +260,7 @@ const SchedulerMode = () => {
 
           {availableSlots.length === 0 && bookedSlots.length === 0 && (
             <div className="card p-6 text-center text-gray-500">
-              No slots available for this date
+              No slots available for this date. Please try another date.
             </div>
           )}
         </div>
@@ -313,12 +268,12 @@ const SchedulerMode = () => {
 
       <div className="flex space-x-4">
         <button
-          onClick={() => setStep(3)}
+          onClick={() => setStep(2)}
           className="btn-secondary"
         >
           ← Back
         </button>
-        {selectedSlot && action === 'schedule' && (
+        {selectedSlot && (
           <button
             onClick={handleSchedule}
             disabled={loading}
@@ -338,7 +293,7 @@ const SchedulerMode = () => {
     </div>
   );
 
-  const renderStep5 = () => (
+  const renderStep4 = () => (
     <div className="space-y-6 text-center">
       <div className="card p-8">
         <CheckCircle className="w-16 h-16 text-success-500 mx-auto mb-4" />
@@ -407,10 +362,9 @@ const SchedulerMode = () => {
         </div>
         <div className="text-xs text-gray-500">
           {step === 1 && 'Select Type'}
-          {step === 2 && 'Select Action'}
-          {step === 3 && 'Select Date'}
-          {step === 4 && 'Select Time Slot'}
-          {step === 5 && 'Confirmation'}
+          {step === 2 && 'Select Date'}
+          {step === 3 && 'Select Time Slot'}
+          {step === 4 && 'Confirmation'}
         </div>
       </div>
 
@@ -420,7 +374,6 @@ const SchedulerMode = () => {
         {step === 2 && renderStep2()}
         {step === 3 && renderStep3()}
         {step === 4 && renderStep4()}
-        {step === 5 && renderStep5()}
       </div>
     </div>
   );

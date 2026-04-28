@@ -80,6 +80,14 @@ class ApiService {
     return date.toISOString().split('T')[0];
   }
 
+  // Direct scheduling for Smart Scheduler
+  async directSchedule(date, slot, sessionId = 'default_user') {
+    return this.request('/direct-schedule', {
+      method: 'POST',
+      body: JSON.stringify({ date, slot, session_id: sessionId }),
+    });
+  }
+
   // Utility method to format time for display
   formatTimeForDisplay(timeSlot) {
     return timeSlot;

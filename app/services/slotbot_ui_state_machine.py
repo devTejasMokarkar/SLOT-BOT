@@ -87,7 +87,7 @@ class SlotBotUIStateMachine:
     
     def _handle_action_selection(self, action: str) -> Dict:
         """Handle action selection from UI buttons"""
-        if action == "schedule_appointment":
+        if action == "schedule" or action == "schedule_appointment":
             self.intent = "SCHEDULE"
             self.state = "WAITING_FOR_DATE"
             return self.format_response(

@@ -259,6 +259,59 @@ async def list_slots(req: SlotRequest):
             booked_slots=[]
         )
 
+class DirectScheduleRequest(BaseModel):
+    date: str
+    slot: str
+    session_id: str = "default"
+
+@app.post("/direct-schedule", response_model=UIChatResponse)
+async def direct_schedule(req: DirectScheduleRequest):
+    """Direct scheduling endpoint for Smart Scheduler"""
+    try:
+        # Convert slot to ISO datetime
+        from datetime import datetime
+        slot_time = datetime.strptime(req.slot, "%I:%M %p").time()
+        date_obj = datetime.fromisoformat(req.date)
+        datetime_obj = datetime.combine(date_obj.date(), slot_time)
+        datetime_str = f"{datetime_obj.strftime('%Y-%m-%dT%H:%M:%S')}+05:30"
+        
+        logger.info(f"Direct scheduling: {req.date} {req.slot} -> {datetime_str}")
+        
+        # Create meeting directly
+        result = create_meeting_tool(datetime_str, 30)
+        
+        if result.get("success"):
+            return UIChatResponse(
+                intent="SCHEDULE",
+                date=req.date,
+                selected_slot=req.slot,
+                message="✅ Meeting scheduled successfully",
+                action="COMPLETE",
+                session_id=req.session_id,
+                event_id=result.get("event_id"),
+                event_link=result.get("event_link")
+            )
+        else:
+            return UIChatResponse(
+                intent="SCHEDULE",
+                date=req.date,
+                selected_slot=req.slot,
+                message=f"❌ Failed to create meeting: {result.get('error')}",
+                action="ERROR",
+                session_id=req.session_id
+            )
+            
+    except Exception as e:
+        logger.error(f"Direct schedule error: {e}")
+        return UIChatResponse(
+            intent="SCHEDULE",
+            date=req.date,
+            selected_slot=req.slot,
+            message="❌ Failed to schedule meeting. Please try again.",
+            action="ERROR",
+            session_id=req.session_id
+        )
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
