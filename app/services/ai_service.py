@@ -214,7 +214,9 @@ def get_ai_response(messages: List[Dict]):
                 {"role": "system", "content": dynamic_system_prompt},
                 *messages
             ],
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
+            max_tokens=200,  # Limit response length
+            temperature=0.3  # Lower temperature for faster, more consistent responses
         )
         return json.loads(response.choices[0].message.content.strip())
     except Exception as e:

@@ -38,7 +38,7 @@ def chat():
         }
         
         try:
-            response = requests.post(url, json=payload, timeout=15)
+            response = requests.post(url, json=payload, timeout=30)
             if response.status_code == 200:
                 data = response.json()
                 print(f"Slot Bot: {data.get('message')}")
