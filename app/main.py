@@ -122,7 +122,7 @@ async def chat(req: ChatRequest):
                         session_id=session_id
                     )
                 
-                res = create_calendar_event(dt, "Meeting", dur)
+                res = create_meeting_with_attendees(dt, "Meeting", [], dur)
                 if res.get("success"):
                     event_id = res.get("event_id")
                     event_link = res.get("event_link")
@@ -296,6 +296,7 @@ async def direct_schedule(req: DirectScheduleRequest):
         
         logger.info(f"Direct scheduling: {req.date} {req.slot} -> {datetime_str}")
         logger.info(f"Title: {req.title}, Attendees: {req.attendees}")
+        logger.info(f"Email invitations will be sent to: {req.attendees if req.attendees else 'No attendees'}")
         
         # Create meeting directly with title and attendees
         result = create_meeting_with_attendees(datetime_str, req.title, req.attendees)

@@ -81,10 +81,10 @@ class ApiService {
   }
 
   // Direct scheduling for Smart Scheduler
-  async directSchedule(date, slot, sessionId = 'default_user') {
+  async directSchedule(date, slot, sessionId = 'default_user', title = 'Meeting', attendees = []) {
     return this.request('/direct-schedule', {
       method: 'POST',
-      body: JSON.stringify({ date, slot, session_id: sessionId }),
+      body: JSON.stringify({ date, slot, session_id: sessionId, title, attendees }),
     });
   }
 

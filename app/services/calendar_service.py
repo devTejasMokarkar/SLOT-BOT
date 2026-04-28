@@ -59,7 +59,7 @@ def create_calendar_event(start_time, summary="Meeting", duration_minutes=30):
             },
         }
         
-        event = service.events().insert(calendarId='primary', body=event).execute()
+        event = service.events().insert(calendarId='primary', body=event, sendUpdates='all').execute()
         
         return {
             'success': True,

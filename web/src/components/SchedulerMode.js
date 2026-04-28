@@ -84,7 +84,7 @@ const SchedulerMode = () => {
       const sessionId = `scheduler_${Date.now()}`;
       
       // Use direct scheduling endpoint
-      const response = await apiService.directSchedule(selectedDate, selectedSlot, sessionId);
+      const response = await apiService.directSchedule(selectedDate, selectedSlot, sessionId, 'Meeting', participants);
 
       if (response.event_link) {
         setEventLink(response.event_link);
@@ -161,52 +161,6 @@ const SchedulerMode = () => {
           min={today}
           className="input-field"
         />
-      </div>
-
-      <div className="card p-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          <Users className="inline w-4 h-4 mr-2" />
-          Add Participants (Emails) - Optional
-        </label>
-        
-        <div className="space-y-3">
-          <div className="flex space-x-2">
-            <input
-              type="email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              onKeyPress={handleEmailKeyPress}
-              placeholder="Enter email address"
-              className="flex-1 input-field"
-            />
-            <button
-              onClick={addParticipant}
-              disabled={!isValidEmail(emailInput) || participants.includes(emailInput)}
-              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed p-2"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-          
-          {participants.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {participants.map((email) => (
-                <div
-                  key={email}
-                  className="inline-flex items-center space-x-1 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-sm"
-                >
-                  <span>{email}</span>
-                  <button
-                    onClick={() => removeParticipant(email)}
-                    className="text-primary-600 hover:text-primary-800"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       <button
@@ -321,6 +275,53 @@ const SchedulerMode = () => {
           )}
         </div>
       )}
+
+      {/* Email Participants Section */}
+      <div className="card p-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          <Users className="inline w-4 h-4 mr-2" />
+          Add Participants (Emails) - Optional
+        </label>
+        
+        <div className="space-y-3">
+          <div className="flex space-x-2">
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              onKeyPress={handleEmailKeyPress}
+              placeholder="Enter email address"
+              className="flex-1 input-field"
+            />
+            <button
+              onClick={addParticipant}
+              disabled={!isValidEmail(emailInput) || participants.includes(emailInput)}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed p-2"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          
+          {participants.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {participants.map((email) => (
+                <div
+                  key={email}
+                  className="inline-flex items-center space-x-1 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-sm"
+                >
+                  <span>{email}</span>
+                  <button
+                    onClick={() => removeParticipant(email)}
+                    className="text-primary-600 hover:text-primary-800"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="flex space-x-4">
         <button
